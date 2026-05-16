@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controle de Tapetes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .toast { animation: slidein .25s ease-out; }
+    @keyframes slidein { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-900">
+
+<div id="app"></div>
+<div id="toasts" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+<script>
+// =====================================================================
+// === CONFIG ==========================================================
+// =====================================================================
+const SUPABASE_URL = 'https://znlxrftjnzmqhsgaaoci.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_vWGMf7ZuxhMXpKBMHmSlOg_IiLR1aeG';
+
+// =====================================================================
+// === UTIL ============================================================
+// =====================================================================
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') node.className = v;
+    else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  for (const child of children.flat()) {
+    if (child == null || child === false) continue;
+    node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+  }
+  return node;
+}
+
+function toast(message, type = 'info') {
+  const colors = { info: 'bg-blue-600', success: 'bg-green-600', error: 'bg-red-600' };
+  const node = el('div', {
+    class: 'toast text-white px-4 py-2 rounded-lg shadow-lg ' + (colors[type] || colors.info)
+  }, message);
+  $('#toasts').appendChild(node);
+  setTimeout(() => node.remove(), 4000);
+}
+
+function setApp(node) {
+  const app = $('#app');
+  app.replaceChildren(node);
+}
+
+// =====================================================================
+// === SUPA ============================================================
+// =====================================================================
+const supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true }
+});
+
+// =====================================================================
+// === AUTH ============================================================
+// =====================================================================
+let CURRENT_USER = null;  // { id, email, nome, tipo, fornecedor_id }
+
+async function login(email, senha) {
+  const { data, error } = await supa.auth.signInWithPassword({ email, password: senha });
+  if (error) throw error;
+  await loadCurrentUser();
+  return data.user;
+}
+
+async function logout() {
+  await supa.auth.signOut();
+  CURRENT_USER = null;
+  navigate('#/login');
+}
+
+async function loadCurrentUser() {
+  const { data: { session } } = await supa.auth.getSession();
+  if (!session) { CURRENT_USER = null; return null; }
+  const { data, error } = await supa.from('usuarios')
+    .select('id, email, nome, tipo, fornecedor_id')
+    .eq('id', session.user.id)
+    .single();
+  if (error) {
+    console.error('Erro carregando perfil:', error);
+    CURRENT_USER = null;
+    return null;
+  }
+  CURRENT_USER = data;
+  return data;
+}
+
+// =====================================================================
+// === ROUTER ==========================================================
+// =====================================================================
+const routes = {
+  '#/login':    { render: screenLogin, public: true },
+  '#/painel':   { render: screenPainel, roles: ['admin'] },
+  '#/fornecedor/home': { render: screenFornecedorHome, roles: ['fornecedor'] },
+};
+
+function navigate(hash) {
+  if (location.hash !== hash) location.hash = hash;
+  else handleRoute();
+}
+
+async function handleRoute() {
+  const hash = location.hash || '#/login';
+  const route = routes[hash];
+
+  if (!route) { setApp(screenNotFound()); return; }
+  if (route.public) { setApp(route.render()); return; }
+
+  if (!CURRENT_USER) await loadCurrentUser();
+  if (!CURRENT_USER) { navigate('#/login'); return; }
+
+  if (route.roles && !route.roles.includes(CURRENT_USER.tipo)) {
+    setApp(screenForbidden());
+    return;
+  }
+
+  setApp(route.render());
+}
+
+// =====================================================================
+// === SCREENS =========================================================
+// =====================================================================
+
+function screenLogin() {
+  const root = el('div', { class: 'min-h-screen flex items-center justify-center p-4' });
+  const card = el('div', { class: 'bg-white rounded-2xl shadow-lg p-8 w-full max-w-md' });
+
+  card.appendChild(el('h1', { class: 'text-2xl font-bold mb-1' }, 'Controle de Tapetes'));
+  card.appendChild(el('p', { class: 'text-gray-500 mb-6' }, 'Entre com seu e-mail e senha'));
+
+  const emailInput = el('input', { type: 'email', placeholder: 'seu@email.com', required: 'required',
+    class: 'w-full border rounded-lg px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500' });
+  const senhaInput = el('input', { type: 'password', placeholder: 'senha', required: 'required',
+    class: 'w-full border rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500' });
+  const btn = el('button', { type: 'submit',
+    class: 'w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg py-2 transition' }, 'Entrar');
+
+  const form = el('form', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      btn.textContent = 'Entrando...';
+      try {
+        await login(emailInput.value.trim(), senhaInput.value);
+        toast('Login OK', 'success');
+        await routeAfterLogin();
+      } catch (err) {
+        toast('E-mail ou senha incorretos', 'error');
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+      }
+    }
+  }, emailInput, senhaInput, btn);
+
+  card.appendChild(form);
+  root.appendChild(card);
+  return root;
+}
+
+async function routeAfterLogin() {
+  await loadCurrentUser();
+  if (!CURRENT_USER) { navigate('#/login'); return; }
+  if (CURRENT_USER.tipo === 'admin') navigate('#/painel');
+  else navigate('#/fornecedor/home');
+}
+
+function shellLayout(menuItems, contentNode) {
+  const root = el('div', { class: 'min-h-screen flex flex-col' });
+
+  const header = el('header', { class: 'bg-white border-b px-4 py-3 flex justify-between items-center' },
+    el('div', { class: 'font-bold text-lg' }, 'Controle de Tapetes'),
+    el('div', { class: 'flex items-center gap-3' },
+      el('span', { class: 'text-sm text-gray-600' }, CURRENT_USER ? (CURRENT_USER.nome + ' (' + CURRENT_USER.tipo + ')') : ''),
+      el('button', { class: 'text-sm text-red-600 hover:underline', onclick: logout }, 'Sair')
+    )
+  );
+
+  const aside = el('aside', { class: 'w-56 bg-white border-r p-4 hidden md:block' });
+  for (const item of menuItems) {
+    aside.appendChild(el('a', {
+      href: item.href,
+      class: 'block py-2 px-3 rounded hover:bg-gray-100 text-gray-700'
+    }, item.label));
+  }
+
+  const main = el('main', { class: 'flex-1 p-6 bg-gray-100' }, contentNode);
+
+  root.appendChild(header);
+  root.appendChild(el('div', { class: 'flex flex-1' }, aside, main));
+  return root;
+}
+
+function screenPainel() {
+  const content = el('div', {},
+    el('h1', { class: 'text-2xl font-bold mb-4' }, 'Painel'),
+    el('div', { class: 'bg-white rounded-xl p-6 shadow' },
+      el('p', { class: 'text-gray-700' }, 'Bem-vindo, ' + CURRENT_USER.nome + '. (Fase 1 — placeholder; as próximas fases vão preencher essa tela.)')
+    )
+  );
+  return shellLayout([
+    { href: '#/painel', label: 'Painel' },
+  ], content);
+}
+
+function screenFornecedorHome() {
+  const content = el('div', {},
+    el('h1', { class: 'text-2xl font-bold mb-4' }, 'Área do Fornecedor'),
+    el('div', { class: 'bg-white rounded-xl p-6 shadow' },
+      el('p', { class: 'text-gray-700' }, 'Olá, ' + CURRENT_USER.nome + '. (Fase 1 — placeholder; suas entregas aparecem aqui a partir da Fase 4/5.)')
+    )
+  );
+  return shellLayout([
+    { href: '#/fornecedor/home', label: 'Minhas OPs' },
+  ], content);
+}
+
+function screenForbidden() {
+  return el('div', { class: 'min-h-screen flex flex-col items-center justify-center p-4 text-center' },
+    el('h1', { class: 'text-3xl font-bold text-red-600 mb-2' }, 'Acesso negado'),
+    el('p', { class: 'text-gray-600 mb-4' }, 'Você não tem permissão pra essa tela.'),
+    el('button', { class: 'bg-blue-700 text-white px-4 py-2 rounded-lg', onclick: () => routeAfterLogin() }, 'Voltar pro início')
+  );
+}
+
+function screenNotFound() {
+  return el('div', { class: 'min-h-screen flex flex-col items-center justify-center p-4 text-center' },
+    el('h1', { class: 'text-3xl font-bold mb-2' }, '404'),
+    el('p', { class: 'text-gray-600 mb-4' }, 'Tela não encontrada.'),
+    el('button', { class: 'bg-blue-700 text-white px-4 py-2 rounded-lg', onclick: () => navigate('#/login') }, 'Ir pro login')
+  );
+}
+
+// =====================================================================
+// === MAIN ============================================================
+// =====================================================================
+async function main() {
+  window.addEventListener('hashchange', handleRoute);
+
+  await loadCurrentUser();
+  if (!CURRENT_USER) {
+    navigate('#/login');
+  } else {
+    if (location.hash && location.hash !== '#/login') handleRoute();
+    else routeAfterLogin();
+  }
+}
+
+main().catch(err => {
+  console.error(err);
+  toast('Erro ao iniciar o app', 'error');
+});
+</script>
+
+</body>
+</html>
