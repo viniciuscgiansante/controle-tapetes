@@ -262,6 +262,7 @@ const routes = {
   '#/painel':   { render: screenPainel, roles: ['admin'] },
   '#/cadastros/cores': { render: screenCadastrosCores, roles: ['admin'] },
   '#/cadastros/modelos': { render: screenCadastrosModelos, roles: ['admin'] },
+  '#/cadastros/parametros': { render: screenCadastrosParametros, roles: ['admin'] },
   '#/fornecedor/home': { render: screenFornecedorHome, roles: ['fornecedor'] },
 };
 
@@ -540,6 +541,61 @@ async function screenCadastrosModelos() {
         reload();
       }
     });
+  }
+
+  await reload();
+  return shellLayout(ADMIN_MENU, container);
+}
+
+async function screenCadastrosParametros() {
+  const container = el('div', {});
+
+  async function reload() {
+    const { data, error } = await supa.from('parametros_largura').select('*').order('largura');
+    if (error) { toast('Erro ao carregar parâmetros', 'error'); console.error(error); return; }
+    render(data || []);
+  }
+
+  function render(rows) {
+    const cards = el('div', { class: 'grid md:grid-cols-2 gap-4' });
+    for (const p of rows) cards.appendChild(cardParametro(p));
+    container.replaceChildren(
+      pageHeader('Parâmetros de cálculo', []),
+      el('p', { class: 'text-gray-600 mb-4 text-sm' }, 'Esses valores são usados no cálculo de fios ao simular uma OP. Edite com cuidado.'),
+      cards
+    );
+  }
+
+  function cardParametro(p) {
+    const card = el('div', { class: 'bg-white rounded-xl shadow p-6' });
+    card.appendChild(el('h2', { class: 'text-lg font-semibold mb-4' }, `Largura ${Number(p.largura).toFixed(2).replace('.', ',')} m`));
+    const pesoInput  = textInput({ type: 'number', step: '0.0001', value: p.peso_linear });
+    const algoInput  = textInput({ type: 'number', step: '0.000001', value: p.algodao_por_ml });
+    const poliInput  = textInput({ type: 'number', step: '0.000001', value: p.poliester_por_ml });
+    const valxInput  = textInput({ type: 'number', step: '0.0001', value: p.valor_x });
+    card.appendChild(formField({ label: 'Peso linear', input: pesoInput }));
+    card.appendChild(formField({ label: 'Algodão / ML', input: algoInput }));
+    card.appendChild(formField({ label: 'Poliéster / ML', input: poliInput }));
+    card.appendChild(formField({ label: 'Valor X', input: valxInput }));
+    const btn = el('button', {
+      class: 'mt-2 bg-blue-700 hover:bg-blue-800 text-white font-semibold px-4 py-2 rounded-lg',
+      onclick: async () => {
+        btn.disabled = true; btn.textContent = 'Salvando...';
+        const payload = {
+          peso_linear: pesoInput.value,
+          algodao_por_ml: algoInput.value,
+          poliester_por_ml: poliInput.value,
+          valor_x: valxInput.value,
+          atualizado_em: new Date().toISOString()
+        };
+        const { error } = await supa.from('parametros_largura').update(payload).eq('largura', p.largura);
+        btn.disabled = false; btn.textContent = 'Salvar';
+        if (error) { toast('Erro ao salvar', 'error'); console.error(error); return; }
+        toast(`Parâmetros de ${p.largura}m atualizados`, 'success');
+      }
+    }, 'Salvar');
+    card.appendChild(btn);
+    return card;
   }
 
   await reload();
