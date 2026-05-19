@@ -1,10 +1,14 @@
 # Status do projeto
 
-## Fase atual: 2 — Admin Cadastros (implementada, aguardando QA do Vinícius)
+## Fase atual: 3 — Admin: Nova OP com cálculo ao vivo
 
-### Fase 2 — Admin Cadastros 🟡 (implementada 2026-05-18, aguardando validação)
+Fase 2 fechada em 2026-05-19. Próxima: tela de criação de OP (Ordem de Produção) com cálculo automático de consumo de fios, custos e preço por etapa.
 
-Tudo no ar em https://viniciuscgiansante.github.io/controle-tapetes/. Falta o Vinícius rodar o checklist QA em `docs/qa/fase2-checklist.md` (9 cenários).
+## Fases concluídas
+
+### Fase 2 — Admin Cadastros ✅ (concluída 2026-05-19)
+
+QA rodado em 2026-05-19: **9/9 cenários** do `docs/qa/fase2-checklist.md` passaram. Tudo no ar em https://viniciuscgiansante.github.io/controle-tapetes/.
 
 **Implementado:**
 - Helpers compartilhados: `modal`, `confirmDialog`, `formField`, `textInput`, `selectInput`, `dataTable`, `pageHeader`
@@ -14,9 +18,7 @@ Tudo no ar em https://viniciuscgiansante.github.io/controle-tapetes/. Falta o Vi
 - Tela de Usuários em modo "vincular UID" (criação no Supabase Auth continua manual)
 - Checklist QA com 9 cenários
 
-**Próximo passo:** Vinícius roda QA. Se passar → atualizar este STATUS.md mudando 🟡 pra ✅ e mover "Fase atual" pra 3. Se falhar → corrigir e reiterar.
-
-## Fases concluídas
+**Bugs pendentes (decisão de adiar):** ver `docs/qa/fase2-bugs-pendentes.md`. Resumo: o select de Largura não vem preenchido ao editar Preço (tentativa de fix em `76bf39c` não confirmada).
 
 ### Fase 1 — Fundação ✅ (concluída em 2026-05-18)
 
@@ -36,8 +38,7 @@ Tudo no ar em https://viniciuscgiansante.github.io/controle-tapetes/. Falta o Vi
 
 ## Próximas fases
 
-- **Fase 2 — Admin: telas de cadastros** (cores, modelos, parâmetros, fornecedores, preços, usuários)
-- Fase 3 — Admin: Nova OP com cálculo ao vivo
+- **Fase 3 — Admin: Nova OP com cálculo ao vivo** ← atual
 - Fase 4 — Fornecedor de fios + recálculo automático
 - Fase 5 — Tecelagem e látex (entregas parciais, defeitos)
 - Fase 6 — Fechamento de OP, painel inicial, estoque
