@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/calculo-op.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; }
     .toast { animation: slidein .25s ease-out; }
@@ -267,6 +268,8 @@ async function loadCurrentUser() {
 const routes = {
   '#/login':    { render: screenLogin, public: true },
   '#/painel':   { render: screenPainel, roles: ['admin'] },
+  '#/ops':      { render: screenListaOPs, roles: ['admin'] },
+  '#/ops/nova': { render: () => screenNovaOP(null), roles: ['admin'] },
   '#/cadastros/cores': { render: screenCadastrosCores, roles: ['admin'] },
   '#/cadastros/modelos': { render: screenCadastrosModelos, roles: ['admin'] },
   '#/cadastros/parametros': { render: screenCadastrosParametros, roles: ['admin'] },
@@ -281,9 +284,17 @@ function navigate(hash) {
   else handleRoute();
 }
 
+// Resolve rota: primeiro match exato, depois dinâmica #/ops/:id (id numérico).
+function matchRoute(hash) {
+  if (routes[hash]) return routes[hash];
+  const m = hash.match(/^#\/ops\/(\d+)$/);
+  if (m) return { render: () => screenNovaOP(Number(m[1])), roles: ['admin'] };
+  return null;
+}
+
 async function handleRoute() {
   const hash = location.hash || '#/login';
-  const route = routes[hash];
+  const route = matchRoute(hash);
 
   if (!route) { setApp(screenNotFound()); return; }
   if (route.public) { setApp(await route.render()); return; }
@@ -376,6 +387,7 @@ function shellLayout(menuItems, contentNode) {
 
 const ADMIN_MENU = [
   { href: '#/painel',                  label: 'Painel' },
+  { href: '#/ops',                     label: 'OPs' },
   { href: '#/cadastros/cores',         label: 'Cores' },
   { href: '#/cadastros/modelos',       label: 'Modelos' },
   { href: '#/cadastros/parametros',    label: 'Parâmetros' },
@@ -405,6 +417,9 @@ function screenFornecedorHome() {
     { href: '#/fornecedor/home', label: 'Minhas OPs' },
   ], content);
 }
+
+async function screenListaOPs() { return shellLayout(ADMIN_MENU, el('div', {}, pageHeader('OPs', []), el('p', {}, 'Em construção'))); }
+async function screenNovaOP(opId) { return shellLayout(ADMIN_MENU, el('div', {}, pageHeader('Nova OP', []), el('p', {}, 'Em construção (opId=' + opId + ')'))); }
 
 async function screenCadastrosCores() {
   const container = el('div', {});
