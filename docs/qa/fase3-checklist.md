@@ -2,7 +2,7 @@
 
 Pré-requisitos: logado como admin; cadastros da Fase 2 populados (seed `db/04_seed.sql`).
 
-## Cálculo (automatizado — `node --test tests/`)
+## Cálculo (automatizado — `node --test tests/calculo-op.test.js`)
 - [x] 1. 1 item 1,40 / 200 m → algodão 0,070 kg por cor; poliéster 0,084 kg PRETO e BRANCO.
 - [x] 2. 2 itens de larguras diferentes → soma por cor correta.
 - [x] 3. Poliéster sempre lista PRETO e BRANCO (mesmo zero).
