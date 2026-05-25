@@ -418,7 +418,54 @@ function screenFornecedorHome() {
   ], content);
 }
 
-async function screenListaOPs() { return shellLayout(ADMIN_MENU, el('div', {}, pageHeader('OPs', []), el('p', {}, 'Em construção'))); }
+const OP_STATUS_BADGE = {
+  simulada:    'bg-gray-100 text-gray-700',
+  aberta:      'bg-blue-100 text-blue-700',
+  em_producao: 'bg-amber-100 text-amber-700',
+  finalizada:  'bg-green-100 text-green-700',
+};
+const OP_STATUS_LABEL = {
+  simulada: 'Simulada', aberta: 'Aberta', em_producao: 'Em produção', finalizada: 'Finalizada',
+};
+
+function badgeStatus(status) {
+  return el('span', { class: 'px-2 py-1 rounded text-xs font-semibold ' + (OP_STATUS_BADGE[status] || 'bg-gray-100 text-gray-700') },
+    OP_STATUS_LABEL[status] || status);
+}
+
+async function screenListaOPs() {
+  const container = el('div', {});
+
+  async function reload() {
+    const { data, error } = await supa.from('ops')
+      .select('id, numero, ano, status, criado_em, op_itens(id)')
+      .order('ano', { ascending: false })
+      .order('numero', { ascending: false });
+    if (error) { toast('Erro ao carregar OPs', 'error'); console.error(error); return; }
+    render(data || []);
+  }
+
+  function render(rows) {
+    container.replaceChildren(
+      pageHeader('Ordens de Produção', [{ label: '+ Nova OP', onclick: () => navigate('#/ops/nova') }]),
+      dataTable({
+        columns: [
+          { key: 'lote', label: 'Lote', render: (r) => `Nº ${r.numero}/${r.ano}` },
+          { key: 'status', label: 'Status', render: (r) => badgeStatus(r.status) },
+          { key: 'itens', label: 'Itens', render: (r) => String((r.op_itens || []).length) },
+          { key: 'criado_em', label: 'Criada em', render: (r) => new Date(r.criado_em).toLocaleDateString('pt-BR') },
+        ],
+        rows,
+        actions: [
+          { label: 'Abrir', onclick: (r) => navigate('#/ops/' + r.id) },
+        ]
+      })
+    );
+  }
+
+  await reload();
+  return shellLayout(ADMIN_MENU, container);
+}
 async function screenNovaOP(opId) { return shellLayout(ADMIN_MENU, el('div', {}, pageHeader('Nova OP', []), el('p', {}, 'Em construção (opId=' + opId + ')'))); }
 
 async function screenCadastrosCores() {
