@@ -491,7 +491,7 @@ async function screenNovaOP(opId) {
   // 2) Estado da tela
   let op = null;                 // OP existente (modo edição/leitura)
   let itens = [];                // [{ modeloId, metros }]
-  let fornSel = { fio_algodao: '', fio_poliester: '', cima: '', latex: '' };
+  let fornSel = { fio_algodao: '', fio_poliester: '', cima: '' };
   let numero = '', ano = new Date().getFullYear();
   let readOnly = false;
   let saving = false;
@@ -528,8 +528,8 @@ async function screenNovaOP(opId) {
     if (validos.length === 0) { toast('Adicione ao menos 1 item com metros', 'error'); return null; }
 
     if (status === 'aberta') {
-      const faltam = ['fio_algodao', 'fio_poliester', 'cima', 'latex'].filter(e => !fornSel[e]);
-      if (faltam.length) { toast('Escolha os 4 fornecedores antes de abrir a OP', 'error'); return null; }
+      const faltam = ['fio_algodao', 'fio_poliester', 'cima'].filter(e => !fornSel[e]);
+      if (faltam.length) { toast('Escolha os 3 fornecedores antes de abrir a OP', 'error'); return null; }
     }
 
     // 1) upsert ops
@@ -556,7 +556,7 @@ async function screenNovaOP(opId) {
 
     // 3) substitui op_fornecedores (apenas etapas escolhidas)
     await supa.from('op_fornecedores').delete().eq('op_id', opIdSalvo);
-    const fornPayload = ['fio_algodao', 'fio_poliester', 'cima', 'latex']
+    const fornPayload = ['fio_algodao', 'fio_poliester', 'cima']
       .filter(e => fornSel[e])
       .map(e => ({ op_id: opIdSalvo, fornecedor_id: fornSel[e], etapa: e }));
     if (fornPayload.length) {
@@ -664,7 +664,6 @@ async function screenNovaOP(opId) {
     left.appendChild(buildFornField('Algodão', 'fio_algodao'));
     left.appendChild(buildFornField('Poliéster', 'fio_poliester'));
     left.appendChild(buildFornField('Tecelagem (parte de cima)', 'cima'));
-    left.appendChild(buildFornField('Látex', 'latex'));
 
     return left;
   }
@@ -721,7 +720,7 @@ async function screenNovaOP(opId) {
     children.push(el('p', { class: 'text-sm mb-1' }, 'BRANCO: ', el('b', {}, fmt(calc.poliester.BRANCO))));
 
     if (!readOnly) {
-      const faltamForn = ['fio_algodao', 'fio_poliester', 'cima', 'latex'].filter(e => !fornSel[e]);
+      const faltamForn = ['fio_algodao', 'fio_poliester', 'cima'].filter(e => !fornSel[e]);
       const btnSim = el('button', {
         class: 'w-full mt-5 mb-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg py-2',
         onclick: salvarSimulacao,
@@ -734,7 +733,7 @@ async function screenNovaOP(opId) {
       }, 'Abrir OP');
       if (faltamForn.length) btnAbrir.setAttribute('disabled', 'disabled');
       children.push(btnSim, btnAbrir);
-      if (faltamForn.length) children.push(el('p', { class: 'text-xs text-gray-500 mt-1' }, 'Escolha os 4 fornecedores para abrir.'));
+      if (faltamForn.length) children.push(el('p', { class: 'text-xs text-gray-500 mt-1' }, 'Escolha os 3 fornecedores para abrir.'));
     }
 
     rightNode.replaceChildren(...children);

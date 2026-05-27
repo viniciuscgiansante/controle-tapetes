@@ -9,11 +9,11 @@ Pré-requisitos: logado como admin; cadastros da Fase 2 populados (seed `db/04_s
 - [x] 4. `montarOrdensCompraFio` gera 1 ordem por cor de algodão + PRETO + BRANCO.
 
 ## UI / Integração (manual no site)
-- [ ] 5. Menu "OPs" aparece; `#/ops` lista as OPs (Lote, status, itens, data).
-- [ ] 6. "Nova OP" sugere número = último do ano + 1.
-- [ ] 7. Adicionar/editar itens recalcula o painel ao vivo.
-- [ ] 8. Remover último item zera o painel.
-- [ ] 9. "Abrir OP" desabilitado até os 4 fornecedores estarem escolhidos.
+- [x] 5. Menu "OPs" aparece; `#/ops` lista as OPs (Lote, status, itens, data).
+- [x] 6. "Nova OP" sugere número = último do ano + 1.
+- [x] 7. Adicionar/editar itens recalcula o painel ao vivo.
+- [x] 8. Remover último item zera o painel.
+- [ ] 9. "Abrir OP" desabilitado até os **3** fornecedores (algodão, poliéster, tecelagem) estarem escolhidos. **Látex NÃO é escolhido na criação da OP** (decidido após a parte de cima — Fase 5).
 - [ ] 10. "Salvar simulação" grava status `simulada` e **não** gera `ordens_compra_fio`.
 - [ ] 11. "Abrir OP" grava `aberta` e gera as `ordens_compra_fio` corretas (conferir no Supabase).
 - [ ] 12. Reabrir uma `simulada` recarrega itens/fornecedores; salvar substitui os filhos.
