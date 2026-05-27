@@ -890,6 +890,66 @@ async function screenNovaOP(opId) {
     return wrap;
   }
 
+  async function aplicarRecalculo(resultado, modo) {
+    if (saving) return;
+    saving = true;
+    try {
+      // 1) grava metros_ajustados em cada op_item
+      for (const it of resultado.itens) {
+        const metros = modo === 'aceitar' ? it.metros_ajustados : it.metros_pedidos;
+        const r = await supa.from('op_itens').update({ metros_ajustados: metros }).eq('id', it.op_item_id);
+        if (r.error) { toast('Erro ao gravar metros ajustados', 'error'); console.error(r.error); return; }
+      }
+
+      // 2) calcula as sobras conforme o modo
+      const round3 = (n) => Math.round(n * 1000) / 1000;
+      const sobras = modo === 'aceitar'
+        ? resultado.sobras
+        : ordens.map(o => {
+            const kg = round3(Number(o.kg_recebido) - Number(o.kg_pedido));
+            return kg > 0
+              ? { ordem_id: o.id, tipo: o.tipo, cor_id: o.cor_id ?? null, cor_poliester: o.cor_poliester ?? null, kg_sobra: kg }
+              : null;
+          }).filter(Boolean);
+
+      // 3) grava saldo por OP + atualiza o totalizador
+      for (const s of sobras) {
+        const insOp = await supa.from('saldo_fios_op').insert({
+          op_id: op.id, cor_id: s.cor_id, cor_poliester: s.cor_poliester, tipo: s.tipo, kg_sobra: s.kg_sobra,
+        });
+        if (insOp.error) { toast('Erro ao gravar saldo da OP', 'error'); console.error(insOp.error); return; }
+
+        // totalizador saldo_fios: lê (filtrando por cor/tipo), soma e grava
+        let sel = supa.from('saldo_fios').select('kg_total').eq('tipo', s.tipo);
+        sel = s.cor_id != null ? sel.eq('cor_id', s.cor_id) : sel.is('cor_id', null).eq('cor_poliester', s.cor_poliester);
+        const cur = await sel.maybeSingle();
+        if (cur.error) { toast('Erro ao ler saldo total', 'error'); console.error(cur.error); return; }
+        const novoTotal = round3((cur.data ? Number(cur.data.kg_total) : 0) + s.kg_sobra);
+
+        let saveTotal;
+        if (cur.data) {
+          let upd = supa.from('saldo_fios').update({ kg_total: novoTotal, atualizado_em: new Date().toISOString() }).eq('tipo', s.tipo);
+          upd = s.cor_id != null ? upd.eq('cor_id', s.cor_id) : upd.is('cor_id', null).eq('cor_poliester', s.cor_poliester);
+          saveTotal = await upd;
+        } else {
+          saveTotal = await supa.from('saldo_fios').insert({
+            cor_id: s.cor_id, cor_poliester: s.cor_poliester, tipo: s.tipo, kg_total: novoTotal,
+          });
+        }
+        if (saveTotal.error) { toast('Erro ao gravar saldo total', 'error'); console.error(saveTotal.error); return; }
+      }
+
+      // 4) libera a produção
+      const st = await supa.from('ops').update({ status: 'em_producao' }).eq('id', op.id);
+      if (st.error) { toast('Erro ao atualizar status da OP', 'error'); console.error(st.error); return; }
+
+      toast(modo === 'aceitar' ? 'Proposta aceita — produção liberada' : 'Pedido mantido — produção liberada', 'success');
+      navigate('#/ops');
+    } finally {
+      saving = false;
+    }
+  }
+
   let rightNode = null;
   function buildRight() {
     rightNode = el('div', { class: 'lg:w-80 bg-gray-50 rounded-xl shadow p-5 self-start' });
