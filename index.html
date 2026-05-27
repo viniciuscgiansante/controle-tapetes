@@ -594,13 +594,15 @@ async function screenNovaOP(opId) {
   let op = null;                 // OP existente (modo edição/leitura)
   let itens = [];                // [{ modeloId, metros }]
   let fornSel = { fio_algodao: '', fio_poliester: '', cima: '' };
+  let opItensRaw = [];
+  let ordens = [];
   let numero = '', ano = new Date().getFullYear();
   let readOnly = false;
   let saving = false;
 
   if (opId) {
     const { data, error } = await supa.from('ops')
-      .select('id, numero, ano, status, op_itens(modelo_id, metros_pedidos), op_fornecedores(fornecedor_id, etapa)')
+      .select('id, numero, ano, status, op_itens(id, modelo_id, metros_pedidos, metros_ajustados), op_fornecedores(fornecedor_id, etapa)')
       .eq('id', opId).single();
     if (error || !data) {
       toast('OP não encontrada', 'error'); console.error(error);
@@ -612,6 +614,14 @@ async function screenNovaOP(opId) {
     itens = (data.op_itens || []).map(i => ({ modeloId: i.modelo_id, metros: i.metros_pedidos }));
     for (const f of (data.op_fornecedores || [])) fornSel[f.etapa] = f.fornecedor_id;
     readOnly = data.status !== 'simulada';
+    opItensRaw = data.op_itens || [];
+    if (op.status !== 'simulada') {
+      const ordRes = await supa.from('ordens_compra_fio')
+        .select('id, tipo, cor_id, cor_poliester, kg_pedido, kg_recebido, status, cores:cor_id(id, nome)')
+        .eq('op_id', op.id);
+      if (ordRes.error) { toast('Erro ao carregar ordens de fio', 'error'); console.error(ordRes.error); }
+      ordens = ordRes.data || [];
+    }
   } else {
     const { data } = await supa.from('ops').select('numero').eq('ano', ano).order('numero', { ascending: false }).limit(1);
     numero = (data && data[0] ? data[0].numero : 0) + 1;
@@ -728,6 +738,7 @@ async function screenNovaOP(opId) {
     grid.appendChild(buildLeft());
     grid.appendChild(buildRight());
     wrap.appendChild(grid);
+    if (op && op.status !== 'simulada') wrap.appendChild(buildBlocoFios());
     return wrap;
   }
 
@@ -791,6 +802,92 @@ async function screenNovaOP(opId) {
     const sel = disabledAttr(selectInput({ options: fornsTipo, value: fornSel[etapa], placeholder: 'Selecione...' }));
     sel.addEventListener('change', () => { fornSel[etapa] = sel.value ? Number(sel.value) : ''; renderRight(); });
     return formField({ label, input: sel });
+  }
+
+  function fmtKg(n) { return (n == null ? '—' : Number(n).toFixed(3).replace('.', ',') + ' kg'); }
+  function fmtMetros(n) { return Number(n).toFixed(2).replace('.', ',') + ' m'; }
+  function rotuloFioOrdem(o) {
+    return o.tipo === 'algodao' ? 'Algodão — ' + (o.cores?.nome || '?') : 'Poliéster — ' + (o.cor_poliester || '?');
+  }
+
+  function buildBlocoFios() {
+    const box = el('div', { class: 'bg-white rounded-xl shadow p-5 mt-6' });
+    box.appendChild(el('div', { class: 'font-semibold text-gray-700 mb-3' }, 'Recebimento de fios'));
+
+    box.appendChild(dataTable({
+      columns: [
+        { key: 'fio', label: 'Fio', render: rotuloFioOrdem },
+        { key: 'kg_pedido', label: 'Pedido', render: (o) => fmtKg(o.kg_pedido) },
+        { key: 'kg_recebido', label: 'Recebido', render: (o) => o.kg_recebido == null ? 'aguardando' : fmtKg(o.kg_recebido) },
+        { key: 'status', label: 'Status', render: (o) => OCF_STATUS_LABEL[o.status] || o.status },
+      ],
+      rows: ordens,
+    }));
+
+    const todasRecebidas = ordens.length > 0 && ordens.every(o => o.kg_recebido != null);
+
+    if (op.status === 'aberta') {
+      if (!todasRecebidas) {
+        const faltam = ordens.filter(o => o.kg_recebido == null).length;
+        box.appendChild(el('p', { class: 'text-sm text-amber-700 mt-3' },
+          `Aguardando recebimento de ${faltam} fio(s) para calcular a proposta de ajuste.`));
+        return box;
+      }
+      box.appendChild(buildProposta());
+    } else {
+      box.appendChild(el('div', { class: 'font-semibold text-gray-700 mt-4 mb-2' }, 'Metros de produção'));
+      box.appendChild(dataTable({
+        columns: [
+          { key: 'modelo', label: 'Modelo', render: (i) => modelosById[i.modelo_id]?.nome || ('#' + i.modelo_id) },
+          { key: 'metros_pedidos', label: 'Pedido', render: (i) => fmtMetros(i.metros_pedidos) },
+          { key: 'metros_ajustados', label: 'Produção', render: (i) => i.metros_ajustados == null ? fmtMetros(i.metros_pedidos) : fmtMetros(i.metros_ajustados) },
+        ],
+        rows: opItensRaw,
+      }));
+    }
+    return box;
+  }
+
+  function buildProposta() {
+    const itensCalc = opItensRaw.map(i => ({ op_item_id: i.id, modelo_id: i.modelo_id, metros_pedidos: Number(i.metros_pedidos) }));
+    const resultado = recalcularOP(itensCalc, ordens);
+    const wrap = el('div', { class: 'mt-4' });
+
+    const semFio = ordens.some(o => Number(o.kg_recebido) <= 0);
+    if (semFio) wrap.appendChild(el('p', { class: 'text-sm text-red-600 mb-2' }, 'Atenção: alguma ordem foi recebida com 0 kg.'));
+
+    wrap.appendChild(el('p', { class: 'text-sm text-gray-700 mb-2' },
+      'Fator de produção (cor mais escassa): ', el('b', {}, resultado.fator.toFixed(2).replace('.', ','))));
+
+    wrap.appendChild(dataTable({
+      columns: [
+        { key: 'modelo', label: 'Modelo', render: (it) => modelosById[itensCalc.find(c => c.op_item_id === it.op_item_id).modelo_id]?.nome || '?' },
+        { key: 'metros_pedidos', label: 'Pedido', render: (it) => fmtMetros(it.metros_pedidos) },
+        { key: 'metros_ajustados', label: 'Proposto', render: (it) => fmtMetros(it.metros_ajustados) },
+      ],
+      rows: resultado.itens,
+    }));
+
+    if (resultado.sobras.length) {
+      wrap.appendChild(el('div', { class: 'text-xs uppercase text-gray-500 mt-3 mb-1' }, 'Sobra de fio (vira saldo)'));
+      for (const s of resultado.sobras) {
+        const nome = s.tipo === 'algodao'
+          ? 'Algodão — ' + (ordens.find(o => o.id === s.ordem_id)?.cores?.nome || '?')
+          : 'Poliéster — ' + s.cor_poliester;
+        wrap.appendChild(el('p', { class: 'text-sm mb-1' }, `${nome}: `, el('b', {}, fmtKg(s.kg_sobra))));
+      }
+    }
+
+    const btnAceitar = el('button', {
+      class: 'bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg px-4 py-2 mt-4 mr-2',
+      onclick: () => aplicarRecalculo(resultado, 'aceitar'),
+    }, 'Aceitar proposta');
+    const btnManter = el('button', {
+      class: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg px-4 py-2 mt-4',
+      onclick: () => aplicarRecalculo(resultado, 'manter'),
+    }, 'Manter pedido');
+    wrap.appendChild(el('div', {}, btnAceitar, btnManter));
+    return wrap;
   }
 
   let rightNode = null;
