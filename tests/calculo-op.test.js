@@ -137,3 +137,14 @@ test('recalcularOP sem ordens mantém metros (fator 1)', () => {
   assert.strictEqual(r.itens[0].metros_ajustados, 50);
   assert.strictEqual(r.sobras.length, 0);
 });
+
+test('recalcularOP ignora ordem com kg_pedido 0 ao calcular o fator', () => {
+  const itens = [{ op_item_id: 10, metros_pedidos: 100 }];
+  const ordens = [
+    { id: 1, tipo: 'algodao', cor_id: 1, cor_poliester: null, kg_pedido: 10, kg_recebido: 8 },
+    { id: 2, tipo: 'algodao', cor_id: 2, cor_poliester: null, kg_pedido: 0, kg_recebido: 0 },
+  ];
+  const r = recalcularOP(itens, ordens);
+  assert.strictEqual(r.fator, 0.8);
+  assert.strictEqual(r.itens[0].metros_ajustados, 80);
+});

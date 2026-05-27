@@ -71,10 +71,12 @@ function recalcularOP(itens, ordens) {
 
   let fator = Infinity;
   for (const o of ordens) {
-    const ratio = Number(o.kg_recebido) / Number(o.kg_pedido);
+    const pedido = Number(o.kg_pedido);
+    if (!(pedido > 0)) continue; // ordem sem pedido não restringe o fator (schema garante > 0; guarda defensiva)
+    const ratio = Number(o.kg_recebido) / pedido;
     if (ratio < fator) fator = ratio;
   }
-  if (!Number.isFinite(fator)) fator = 1; // sem ordens: nada a ajustar
+  if (!Number.isFinite(fator)) fator = 1; // sem ordens válidas: nada a ajustar
 
   const itensOut = itens.map((i) => ({
     op_item_id: i.op_item_id,
