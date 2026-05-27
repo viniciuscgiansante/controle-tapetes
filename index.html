@@ -824,11 +824,11 @@ async function screenNovaOP(opId) {
       rows: ordens,
     }));
 
-    const todasRecebidas = ordens.length > 0 && ordens.every(o => o.kg_recebido != null);
+    const todasRecebidas = ordens.length > 0 && ordens.every(o => o.status !== 'pendente');
 
     if (op.status === 'aberta') {
       if (!todasRecebidas) {
-        const faltam = ordens.filter(o => o.kg_recebido == null).length;
+        const faltam = ordens.filter(o => o.status === 'pendente').length;
         box.appendChild(el('p', { class: 'text-sm text-amber-700 mt-3' },
           `Aguardando recebimento de ${faltam} fio(s) para calcular a proposta de ajuste.`));
         return box;
@@ -861,7 +861,7 @@ async function screenNovaOP(opId) {
 
     wrap.appendChild(dataTable({
       columns: [
-        { key: 'modelo', label: 'Modelo', render: (it) => modelosById[itensCalc.find(c => c.op_item_id === it.op_item_id).modelo_id]?.nome || '?' },
+        { key: 'modelo', label: 'Modelo', render: (it) => modelosById[itensCalc.find(c => c.op_item_id === it.op_item_id)?.modelo_id]?.nome || '?' },
         { key: 'metros_pedidos', label: 'Pedido', render: (it) => fmtMetros(it.metros_pedidos) },
         { key: 'metros_ajustados', label: 'Proposto', render: (it) => fmtMetros(it.metros_ajustados) },
       ],
