@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { calcularFiosOP, larguraKey, montarOrdensCompraFio } = require('../js/calculo-op.js');
+const { calcularFiosOP, larguraKey, montarOrdensCompraFio, recalcularOP } = require('../js/calculo-op.js');
 
 // Parâmetros do seed (db/04_seed.sql)
 const PARAMS = {
@@ -78,4 +78,62 @@ test('montarOrdensCompraFio arredonda kg_pedido para 3 casas', () => {
 test('montarOrdensCompraFio não gera ordens sem itens', () => {
   const ordens = montarOrdensCompraFio(calcularFiosOP([], MODELOS, PARAMS));
   assert.strictEqual(ordens.length, 0);
+});
+
+test('recalcularOP fator < 1 escala metros pra baixo e gera saldo da cor não-gargalo', () => {
+  const itens = [{ op_item_id: 10, metros_pedidos: 200 }];
+  const ordens = [
+    { id: 1, tipo: 'algodao', cor_id: 1, cor_poliester: null, kg_pedido: 10, kg_recebido: 10 },
+    { id: 2, tipo: 'algodao', cor_id: 2, cor_poliester: null, kg_pedido: 10, kg_recebido: 5 },
+  ];
+  const r = recalcularOP(itens, ordens);
+  assert.strictEqual(r.fator, 0.5);
+  assert.strictEqual(r.itens[0].metros_ajustados, 100);
+  assert.strictEqual(r.itens[0].metros_pedidos, 200);
+  assert.strictEqual(r.sobras.length, 1);
+  assert.deepStrictEqual(r.sobras[0], { ordem_id: 1, tipo: 'algodao', cor_id: 1, cor_poliester: null, kg_sobra: 5 });
+});
+
+test('recalcularOP fator > 1 escala metros pra cima', () => {
+  const itens = [{ op_item_id: 10, metros_pedidos: 100 }];
+  const ordens = [
+    { id: 1, tipo: 'poliester', cor_id: null, cor_poliester: 'PRETO', kg_pedido: 10, kg_recebido: 20 },
+    { id: 2, tipo: 'poliester', cor_id: null, cor_poliester: 'BRANCO', kg_pedido: 10, kg_recebido: 15 },
+  ];
+  const r = recalcularOP(itens, ordens);
+  assert.strictEqual(r.fator, 1.5);
+  assert.strictEqual(r.itens[0].metros_ajustados, 150);
+  assert.strictEqual(r.sobras.length, 1);
+  assert.strictEqual(r.sobras[0].ordem_id, 1);
+  assert.strictEqual(r.sobras[0].kg_sobra, 5);
+});
+
+test('recalcularOP fator = 1 não ajusta e não gera saldo', () => {
+  const itens = [{ op_item_id: 10, metros_pedidos: 120 }];
+  const ordens = [
+    { id: 1, tipo: 'algodao', cor_id: 1, cor_poliester: null, kg_pedido: 7, kg_recebido: 7 },
+    { id: 2, tipo: 'poliester', cor_id: null, cor_poliester: 'PRETO', kg_pedido: 8, kg_recebido: 8 },
+  ];
+  const r = recalcularOP(itens, ordens);
+  assert.strictEqual(r.fator, 1);
+  assert.strictEqual(r.itens[0].metros_ajustados, 120);
+  assert.strictEqual(r.sobras.length, 0);
+});
+
+test('recalcularOP arredonda metros a 2 casas e sobra a 3 casas', () => {
+  const itens = [{ op_item_id: 10, metros_pedidos: 100 }];
+  const ordens = [
+    { id: 1, tipo: 'algodao', cor_id: 1, cor_poliester: null, kg_pedido: 3, kg_recebido: 1 },
+    { id: 2, tipo: 'algodao', cor_id: 2, cor_poliester: null, kg_pedido: 3, kg_recebido: 3 },
+  ];
+  const r = recalcularOP(itens, ordens);
+  assert.strictEqual(r.itens[0].metros_ajustados, 33.33);
+  assert.strictEqual(r.sobras[0].kg_sobra, 2);
+});
+
+test('recalcularOP sem ordens mantém metros (fator 1)', () => {
+  const r = recalcularOP([{ op_item_id: 10, metros_pedidos: 50 }], []);
+  assert.strictEqual(r.fator, 1);
+  assert.strictEqual(r.itens[0].metros_ajustados, 50);
+  assert.strictEqual(r.sobras.length, 0);
 });

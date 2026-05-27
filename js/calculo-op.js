@@ -59,6 +59,46 @@ function montarOrdensCompraFio(calculo) {
   return ordens;
 }
 
+// Recalcula a OP a partir do fio realmente recebido (fator-gargalo).
+// A cor de fio com menor (kg_recebido / kg_pedido) define o quanto a OP escala.
+// itens:  [{ op_item_id, metros_pedidos }]
+// ordens: [{ id, tipo, cor_id, cor_poliester, kg_pedido, kg_recebido }]
+// Retorna: { fator, itens:[{op_item_id, metros_pedidos, metros_ajustados}],
+//            sobras:[{ordem_id, tipo, cor_id, cor_poliester, kg_sobra}] }  (só sobras > 0)
+function recalcularOP(itens, ordens) {
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const round3 = (n) => Math.round(n * 1000) / 1000;
+
+  let fator = Infinity;
+  for (const o of ordens) {
+    const ratio = Number(o.kg_recebido) / Number(o.kg_pedido);
+    if (ratio < fator) fator = ratio;
+  }
+  if (!Number.isFinite(fator)) fator = 1; // sem ordens: nada a ajustar
+
+  const itensOut = itens.map((i) => ({
+    op_item_id: i.op_item_id,
+    metros_pedidos: Number(i.metros_pedidos),
+    metros_ajustados: round2(Number(i.metros_pedidos) * fator),
+  }));
+
+  const sobras = [];
+  for (const o of ordens) {
+    const kgSobra = round3(Number(o.kg_recebido) - fator * Number(o.kg_pedido));
+    if (kgSobra > 0) {
+      sobras.push({
+        ordem_id: o.id,
+        tipo: o.tipo,
+        cor_id: o.cor_id ?? null,
+        cor_poliester: o.cor_poliester ?? null,
+        kg_sobra: kgSobra,
+      });
+    }
+  }
+
+  return { fator, itens: itensOut, sobras };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { larguraKey, calcularFiosOP, montarOrdensCompraFio };
+  module.exports = { larguraKey, calcularFiosOP, montarOrdensCompraFio, recalcularOP };
 }
