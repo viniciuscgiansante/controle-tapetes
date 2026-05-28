@@ -2,18 +2,19 @@
 
 ## Fase atual: 5 — Tecelagem e látex
 
-Fase 4 implementada em 2026-05-28, aguardando QA do Vinícius. Próxima: telas das terceirizadas (tecelagem e látex) com entregas parciais e suporte a múltiplos destinos de látex por OP (ver [[project_regra_latex]]).
+Fase 4 concluída (QA 15/15 em 2026-05-28). Próxima: telas das terceirizadas (tecelagem e látex) com entregas parciais e suporte a múltiplos destinos de látex por OP (ver [[project_regra_latex]]).
 
 ## Fases concluídas
 
-### Fase 4 — Recebimento de fios + recálculo automático ⏳ (implementada 2026-05-28, aguardando QA)
+### Fase 4 — Recebimento de fios + recálculo automático ✅ (concluída 2026-05-28, QA 15/15)
 
 **Implementado:**
-- Função pura `recalcularOP` em `js/calculo-op.js` (fator-gargalo: a cor de fio com menor kg_recebido/kg_pedido define o quanto a OP escala); 6 testes `node --test` passando (15/15 totais)
+- Funções puras em `js/calculo-op.js`: `recalcularOP` (fator-gargalo — a cor de fio com menor `kg_recebido/kg_pedido` define o quanto a OP escala) e `consumoPorOrdem` (consumo/sobra por ordem para metros livres, usada pela proposta com sliders); 7 testes `node --test` passando (17/17 totais)
 - Tela do fornecedor `#/fornecedor/ordens` (`screenFornecedorOrdens`) — lista Pendentes e Recebidas, registra `kg_recebido`/`data_recebimento`/`status` por ordem; redirect de login do fornecedor repontado para essa rota
-- Bloco "Recebimento de fios" no detalhe da OP (admin): tabela das ordens; aviso "aguardando" enquanto faltam recebimentos; quando todas recebidas, mostra fator + tabela pedido→proposto + sobras + botões **Aceitar proposta** / **Manter pedido**; em `em_producao`/`finalizada` mostra "Metros de produção" em leitura
-- `aplicarRecalculo` grava `metros_ajustados` em `op_itens`, insere sobras em `saldo_fios_op`, incrementa `saldo_fios` (read-then-update-or-insert por causa do unique key com colunas nulláveis) e move a OP para `em_producao`
-- Checklist QA: `docs/qa/fase4-checklist.md` (itens 1–4 automatizados ✅; itens 5–13 manuais pendentes)
+- Bloco "Recebimento de fios" no detalhe da OP (admin): Pendentes como formulário inline (o admin também pode dar baixa), Recebidas em tabela; aviso "aguardando" enquanto faltam recebimentos; quando todas recebidas, mostra a proposta com **um slider por item** (0 → máximo individual), painel **"Consumo de fio"** recalculado ao vivo, botão **↺ Voltar à proposta proporcional** e botões **Aceitar proposta** / **Manter pedido**; em `em_producao`/`finalizada` mostra "Metros de produção" em leitura
+- `aplicarRecalculo` grava `metros_ajustados` em `op_itens` (valor exato do slider quando "Aceitar"), insere sobras em `saldo_fios_op`, incrementa `saldo_fios` (read-then-update-or-insert por causa do unique key com colunas nulláveis) e move a OP para `em_producao`. Em erros pós-escrita, navega pra lista pra evitar re-aplicação de saldo
+- Modelos exibidos no padrão `Nome 1.40m · COR1/COR2` em todo o admin (helper `rotuloModelo`)
+- Checklist QA: `docs/qa/fase4-checklist.md` — **15/15 aprovado**
 
 ### Fase 3 — Admin: Nova OP com cálculo ao vivo ✅ (concluída 2026-05-27, QA 14/14)
 
