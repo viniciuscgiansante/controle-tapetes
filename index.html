@@ -922,6 +922,7 @@ async function screenNovaOP(opId) {
       const entRes = await supa.from('entregas')
         .select('id, fornecedor_id, data, observacao, fornecedores:fornecedor_id(nome), entrega_itens(id, op_id, op_item_id, metros_entregues, defeito, observacao)')
         .eq('etapa', 'cima')
+        .eq('fornecedor_id', cimaFornecedorId)
         .order('data', { ascending: false })
         .order('id', { ascending: false });
       if (entRes.error) { toast('Erro ao carregar entregas de tecelagem', 'error'); console.error(entRes.error); }
@@ -1322,6 +1323,7 @@ async function screenNovaOP(opId) {
     const entRes = await supa.from('entregas')
       .select('id, fornecedor_id, data, observacao, fornecedores:fornecedor_id(nome), entrega_itens(id, op_id, op_item_id, metros_entregues, defeito, observacao)')
       .eq('etapa', 'cima')
+      .eq('fornecedor_id', cimaFornecedorId)
       .order('data', { ascending: false })
       .order('id', { ascending: false });
     if (entRes.error) { toast('Erro ao recarregar entregas', 'error'); console.error(entRes.error); return; }
