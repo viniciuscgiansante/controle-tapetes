@@ -526,24 +526,26 @@ async function atualizarEntregaCima({ entregaId, opId, payload }) {
   await supa.from('entrega_itens').delete().eq('entrega_id', entregaId);
   const itens = payload.linhas.map(l => ({ entrega_id: entregaId, op_id: opId, ...l }));
   const insItens = await supa.from('entrega_itens').insert(itens);
+  // MVP: se a reinsercao falhar aqui, a entrega fica sem itens. Como o app eh
+  // single-admin e baixo volume, aceitamos o risco e a correcao manual via Supabase.
   if (insItens.error) { toast('Erro ao regravar itens da entrega', 'error'); console.error(insItens.error); return false; }
   toast('Entrega atualizada', 'success');
   return true;
 }
 
-async function excluirEntrega(entregaId) {
-  return new Promise((resolve) => {
-    confirmDialog({
-      title: 'Excluir entrega',
-      message: 'Esta ação remove a entrega e todos os seus itens. Continuar?',
-      confirmLabel: 'Excluir',
-      onConfirm: async () => {
-        const r = await supa.from('entregas').delete().eq('id', entregaId);
-        if (r.error) { toast('Erro ao excluir entrega', 'error'); console.error(r.error); resolve(false); return; }
-        toast('Entrega excluída', 'success');
-        resolve(true);
-      },
-    });
+// Excluir entrega: usa o padrao de callback do confirmDialog (que so dispara
+// onConfirm em caso afirmativo). onSuccess() roda apos delete bem-sucedido.
+function excluirEntrega(entregaId, onSuccess) {
+  confirmDialog({
+    title: 'Excluir entrega',
+    message: 'Esta ação remove a entrega e todos os seus itens. Continuar?',
+    confirmLabel: 'Excluir',
+    onConfirm: async () => {
+      const r = await supa.from('entregas').delete().eq('id', entregaId);
+      if (r.error) { toast('Erro ao excluir entrega', 'error'); console.error(r.error); return; }
+      toast('Entrega excluída', 'success');
+      if (onSuccess) onSuccess();
+    },
   });
 }
 
@@ -684,7 +686,7 @@ async function screenFornecedorEntregas() {
         el('button', { class: 'text-sm text-blue-700 hover:underline mr-3',
           onclick: () => abrirEdicao(entrega, opRef, modelosById) }, 'Editar'),
         el('button', { class: 'text-sm text-red-600 hover:underline',
-          onclick: async () => { const ok = await excluirEntrega(entrega.id); if (ok) reload(); } }, 'Excluir'),
+          onclick: () => excluirEntrega(entrega.id, reload) }, 'Excluir'),
       ),
     ));
     if (entrega.observacao) wrap.appendChild(el('div', { class: 'text-xs text-gray-500 mb-1' }, entrega.observacao));
