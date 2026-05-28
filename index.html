@@ -809,6 +809,10 @@ async function screenNovaOP(opId) {
   function rotuloFioOrdem(o) {
     return o.tipo === 'algodao' ? 'Algodão — ' + (o.cores?.nome || '?') : 'Poliéster — ' + (o.cor_poliester || '?');
   }
+  function rotuloModelo(modelo) {
+    if (!modelo) return '?';
+    return `${modelo.nome} ${larguraKey(modelo.largura)}m · ${modelo.cor_1?.nome || '?'}/${modelo.cor_2?.nome || '?'}`;
+  }
 
   async function reloadOrdens() {
     if (!op || op.status === 'simulada') return;
@@ -900,7 +904,7 @@ async function screenNovaOP(opId) {
       box.appendChild(el('div', { class: 'font-semibold text-gray-700 mt-4 mb-2' }, 'Metros de produção'));
       box.appendChild(dataTable({
         columns: [
-          { key: 'modelo', label: 'Modelo', render: (i) => modelosById[i.modelo_id]?.nome || ('#' + i.modelo_id) },
+          { key: 'modelo', label: 'Modelo', render: (i) => rotuloModelo(modelosById[i.modelo_id]) },
           { key: 'metros_pedidos', label: 'Pedido', render: (i) => fmtMetros(i.metros_pedidos) },
           { key: 'metros_ajustados', label: 'Produção', render: (i) => i.metros_ajustados == null ? fmtMetros(i.metros_pedidos) : fmtMetros(i.metros_ajustados) },
         ],
@@ -969,7 +973,7 @@ async function screenNovaOP(opId) {
       const modelo = modelosById[c.modelo_id];
       const linha = el('div', { class: 'border rounded-lg p-3' },
         el('div', { class: 'flex items-center justify-between mb-1' },
-          el('div', { class: 'text-sm font-medium text-gray-800' }, (modelo?.nome || '?') + ' (pedido ' + fmtMetros(c.metros_pedidos) + ')'),
+          el('div', { class: 'text-sm font-medium text-gray-800' }, rotuloModelo(modelo) + '  ·  pedido ' + fmtMetros(c.metros_pedidos)),
           valorLabel,
         ),
         slider,
