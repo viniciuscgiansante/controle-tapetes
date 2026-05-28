@@ -810,31 +810,93 @@ async function screenNovaOP(opId) {
     return o.tipo === 'algodao' ? 'Algodão — ' + (o.cores?.nome || '?') : 'Poliéster — ' + (o.cor_poliester || '?');
   }
 
+  async function reloadOrdens() {
+    if (!op || op.status === 'simulada') return;
+    const r = await supa.from('ordens_compra_fio')
+      .select('id, tipo, cor_id, cor_poliester, kg_pedido, kg_recebido, status, cores:cor_id(id, nome)')
+      .eq('op_id', op.id);
+    if (r.error) { toast('Erro ao recarregar ordens de fio', 'error'); console.error(r.error); return; }
+    ordens = r.data || [];
+    render();
+  }
+
+  function buildOrdemPendenteRow(ordem) {
+    const kgInput = textInput({ type: 'number', step: '0.001', value: String(ordem.kg_pedido) });
+    const dataInput = textInput({ type: 'date', value: new Date().toISOString().slice(0, 10) });
+    const btn = el('button', {
+      class: 'bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg px-3 py-2',
+      onclick: async () => {
+        const kg = Number(kgInput.value);
+        if (!(kg > 0)) { toast('Informe o kg recebido', 'error'); return; }
+        const dataRec = dataInput.value || new Date().toISOString().slice(0, 10);
+        const status = kg < Number(ordem.kg_pedido) ? 'recebido_parcial' : 'recebido_total';
+        btn.disabled = true;
+        const { error } = await supa.from('ordens_compra_fio')
+          .update({ kg_recebido: kg, data_recebimento: dataRec, status })
+          .eq('id', ordem.id);
+        if (error) { toast('Erro ao registrar recebimento', 'error'); console.error(error); btn.disabled = false; return; }
+        toast('Recebimento registrado', 'success');
+        reloadOrdens();
+      }
+    }, 'Registrar');
+
+    return el('div', { class: 'flex flex-wrap items-end gap-3 border-b py-3' },
+      el('div', { class: 'flex-1 min-w-[200px]' },
+        el('div', { class: 'font-medium text-gray-800' }, rotuloFioOrdem(ordem)),
+        el('div', { class: 'text-xs text-gray-500' }, 'Pedido: ' + fmtKg(ordem.kg_pedido)),
+      ),
+      el('div', { class: 'w-32' }, formField({ label: 'Kg recebido', input: kgInput })),
+      el('div', { class: 'w-40' }, formField({ label: 'Data', input: dataInput })),
+      btn,
+    );
+  }
+
   function buildBlocoFios() {
     const box = el('div', { class: 'bg-white rounded-xl shadow p-5 mt-6' });
     box.appendChild(el('div', { class: 'font-semibold text-gray-700 mb-3' }, 'Recebimento de fios'));
 
-    box.appendChild(dataTable({
-      columns: [
-        { key: 'fio', label: 'Fio', render: rotuloFioOrdem },
-        { key: 'kg_pedido', label: 'Pedido', render: (o) => fmtKg(o.kg_pedido) },
-        { key: 'kg_recebido', label: 'Recebido', render: (o) => o.kg_recebido == null ? 'aguardando' : fmtKg(o.kg_recebido) },
-        { key: 'status', label: 'Status', render: (o) => OCF_STATUS_LABEL[o.status] || o.status },
-      ],
-      rows: ordens,
-    }));
-
-    const todasRecebidas = ordens.length > 0 && ordens.every(o => o.status !== 'pendente');
-
     if (op.status === 'aberta') {
+      const pendentes = ordens.filter(o => o.status === 'pendente');
+      const recebidas = ordens.filter(o => o.status !== 'pendente');
+
+      box.appendChild(el('div', { class: 'text-xs uppercase text-gray-500 mb-1' }, 'Pendentes'));
+      if (pendentes.length === 0) {
+        box.appendChild(el('p', { class: 'text-sm text-gray-400 mb-3' }, 'Nenhuma ordem pendente.'));
+      } else {
+        box.appendChild(el('div', { class: 'mb-3' }, pendentes.map(buildOrdemPendenteRow)));
+      }
+
+      if (recebidas.length) {
+        box.appendChild(el('div', { class: 'text-xs uppercase text-gray-500 mt-2 mb-1' }, 'Recebidas'));
+        box.appendChild(dataTable({
+          columns: [
+            { key: 'fio', label: 'Fio', render: rotuloFioOrdem },
+            { key: 'kg_pedido', label: 'Pedido', render: (o) => fmtKg(o.kg_pedido) },
+            { key: 'kg_recebido', label: 'Recebido', render: (o) => fmtKg(o.kg_recebido) },
+            { key: 'status', label: 'Status', render: (o) => OCF_STATUS_LABEL[o.status] || o.status },
+          ],
+          rows: recebidas,
+        }));
+      }
+
+      const todasRecebidas = ordens.length > 0 && pendentes.length === 0;
       if (!todasRecebidas) {
-        const faltam = ordens.filter(o => o.status === 'pendente').length;
         box.appendChild(el('p', { class: 'text-sm text-amber-700 mt-3' },
-          `Aguardando recebimento de ${faltam} fio(s) para calcular a proposta de ajuste.`));
+          `Aguardando recebimento de ${pendentes.length} fio(s) para calcular a proposta de ajuste.`));
         return box;
       }
       box.appendChild(buildProposta());
     } else {
+      box.appendChild(dataTable({
+        columns: [
+          { key: 'fio', label: 'Fio', render: rotuloFioOrdem },
+          { key: 'kg_pedido', label: 'Pedido', render: (o) => fmtKg(o.kg_pedido) },
+          { key: 'kg_recebido', label: 'Recebido', render: (o) => o.kg_recebido == null ? '—' : fmtKg(o.kg_recebido) },
+          { key: 'status', label: 'Status', render: (o) => OCF_STATUS_LABEL[o.status] || o.status },
+        ],
+        rows: ordens,
+      }));
+
       box.appendChild(el('div', { class: 'font-semibold text-gray-700 mt-4 mb-2' }, 'Metros de produção'));
       box.appendChild(dataTable({
         columns: [
