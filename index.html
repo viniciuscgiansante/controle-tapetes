@@ -1305,7 +1305,7 @@ async function screenNovaOP(opId) {
           el('div', { class: 'text-sm' },
             el('b', {}, new Date(ent.data + 'T00:00:00').toLocaleDateString('pt-BR')),
             ' · ' + (ent.fornecedores?.nome || '?'),
-            ' → látex: ' + (ent.destino?.nome || '?'),
+            ent.destino?.nome ? ' → látex: ' + ent.destino.nome : '',
           ),
           op.status === 'em_producao' ? el('div', {},
             el('button', { class: 'text-sm text-blue-700 hover:underline mr-3',
