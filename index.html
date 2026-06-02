@@ -522,7 +522,14 @@ async function salvarEntregaCima({ fornecedorId, opId, payload }) {
     await supa.from('entregas').delete().eq('id', entregaId);
     toast('Erro ao gravar itens da entrega', 'error'); console.error(insItens.error); return false;
   }
-  toast('Entrega registrada', 'success');
+  // Fase 5b: a entrega de tecelagem gera automaticamente a OP de látex.
+  const rpc = await supa.rpc('gerar_op_latex', { p_entrega_id: entregaId });
+  if (rpc.error) {
+    toast('Entrega salva, mas falhou ao gerar a OP de látex. Gere manualmente.', 'error');
+    console.error(rpc.error);
+    return true;
+  }
+  toast('Entrega registrada' + (rpc.data ? ' · OP de látex gerada' : ''), 'success');
   return true;
 }
 
