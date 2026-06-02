@@ -236,3 +236,22 @@ test('totalEntregueCimaPorItem ignora metros nao-numericos', () => {
   assert.strictEqual(r[10], 50);
   assert.strictEqual(r[11], undefined);
 });
+
+test('totalEntregueCimaPorItem também serve ao recebido de látex (mesma forma de dados)', () => {
+  const recebimentosLatex = [
+    { op_item_id: 10, metros_entregues: 12.5, defeito: false },
+    { op_item_id: 10, metros_entregues: 7.5, defeito: false },
+    { op_item_id: 11, metros_entregues: 3, defeito: false },
+  ];
+  const total = totalEntregueCimaPorItem(recebimentosLatex);
+  assert.deepStrictEqual(total, { 10: 20, 11: 3 });
+});
+
+test('recebido de látex ignora itens com defeito', () => {
+  const recebimentosLatex = [
+    { op_item_id: 10, metros_entregues: 5, defeito: false },
+    { op_item_id: 10, metros_entregues: 9, defeito: true },
+  ];
+  const total = totalEntregueCimaPorItem(recebimentosLatex);
+  assert.deepStrictEqual(total, { 10: 5 });
+});

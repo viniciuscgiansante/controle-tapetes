@@ -125,7 +125,9 @@ function consumoPorOrdem(itens, ordens, modelosById, parametrosByLargura) {
   });
 }
 
-// Soma metros entregues sem defeito por op_item_id (Fase 5a — tecelagem).
+// Soma metros entregues sem defeito por op_item_id.
+// Usada na tecelagem (Fase 5a, "entregue") e no látex (Fase 5b, "recebido"):
+// a forma de dados é a mesma (entrega_itens), então é agnóstica de etapa.
 // Defeitos ficam gravados no banco mas não somam aqui.
 // itens: [{ op_item_id, metros_entregues, defeito }]
 // Retorna: { [op_item_id]: total_metros }  (arredondado a 2 casas)
