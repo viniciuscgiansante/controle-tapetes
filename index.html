@@ -1072,14 +1072,26 @@ async function screenListaOPs() {
 
   async function reload() {
     const { data, error } = await supa.from('ops')
-      .select('id, numero, ano, status, tipo, criado_em, op_itens(id)')
+      .select('id, numero, ano, status, tipo, criado_em, lote:lote_id(numero, cliente:cliente_id(nome)), op_itens(id, metros_pedidos, metros_ajustados)')
       .order('ano', { ascending: false })
       .order('numero', { ascending: false });
     if (error) { toast('Erro ao carregar OPs', 'error'); console.error(error); return; }
+    const eiRes = await supa.from('entrega_itens').select('op_id, metros_entregues, defeito');
+    if (eiRes.error) { toast('Erro ao carregar progresso', 'error'); console.error(eiRes.error); return; }
+    itensPorOpId = {};
+    for (const ei of (eiRes.data || [])) (itensPorOpId[ei.op_id] = itensPorOpId[ei.op_id] || []).push(ei);
     render(data || []);
   }
 
   let filtroTipo = 'todas';
+  let itensPorOpId = {};
+  function barraProgresso(pct) {
+    return el('div', { class: 'w-32' },
+      el('div', { class: 'h-2 bg-gray-200 rounded-full overflow-hidden' },
+        el('div', { class: 'h-2 bg-blue-600 rounded-full', style: `width:${pct}%` })),
+      el('div', { class: 'text-xs text-gray-500 mt-0.5' }, pct + '%'),
+    );
+  }
   function render(rows) {
     const header = pageHeader('Ordens de Produção', [{ label: '+ Nova OP', onclick: () => navigate('#/ops/nova') }]);
     const filtro = el('div', { class: 'flex gap-2 mb-3' },
@@ -1093,10 +1105,12 @@ async function screenListaOPs() {
       ? el('div', { class: 'bg-white rounded-xl shadow p-8 text-center text-gray-500' }, 'Nenhuma OP para este filtro.')
       : dataTable({
           columns: [
-            { key: 'lote', label: 'Lote', render: (r) => `Nº ${r.numero}/${r.ano}` },
+            { key: 'lote_op', label: 'OP', render: (r) => `Nº ${r.numero}/${r.ano}` },
             { key: 'tipo', label: 'Tipo', render: (r) => badgeTipo(r.tipo || 'tecelagem') },
+            { key: 'lote', label: 'Lote', render: (r) => r.lote ? `Nº ${r.lote.numero}` : '—' },
+            { key: 'cliente', label: 'Cliente', render: (r) => r.lote?.cliente?.nome || '—' },
             { key: 'status', label: 'Status', render: (r) => badgeStatus(r.status) },
-            { key: 'itens', label: 'Itens', render: (r) => String((r.op_itens || []).length) },
+            { key: 'progresso', label: 'Entregue', render: (r) => barraProgresso(percentualEntregueOP(r.op_itens || [], itensPorOpId[r.id] || [])) },
             { key: 'criado_em', label: 'Criada em', render: (r) => new Date(r.criado_em).toLocaleDateString('pt-BR') },
           ],
           rows: visiveis,
