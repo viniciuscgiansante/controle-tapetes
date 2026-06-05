@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { calcularFiosOP, larguraKey, montarOrdensCompraFio, recalcularOP, consumoPorOrdem, totalEntregueCimaPorItem } = require('../js/calculo-op.js');
+const { calcularFiosOP, larguraKey, montarOrdensCompraFio, recalcularOP, consumoPorOrdem, totalEntregueCimaPorItem, percentualEntregueOP, agruparOrdensCompraFio } = require('../js/calculo-op.js');
 
 // Parâmetros do seed (db/04_seed.sql)
 const PARAMS = {
@@ -254,4 +254,54 @@ test('recebido de látex ignora itens com defeito', () => {
   ];
   const total = totalEntregueCimaPorItem(recebimentosLatex);
   assert.deepStrictEqual(total, { 10: 5 });
+});
+
+test('percentualEntregueOP: usa ajustado quando houver, senão pedido', () => {
+  const opItens = [
+    { id: 1, metros_pedidos: 100, metros_ajustados: 80 },
+    { id: 2, metros_pedidos: 20, metros_ajustados: null },
+  ];
+  const entregaItens = [
+    { op_item_id: 1, metros_entregues: 40, defeito: false },
+    { op_item_id: 2, metros_entregues: 10, defeito: false },
+  ];
+  assert.strictEqual(percentualEntregueOP(opItens, entregaItens), 50);
+});
+
+test('percentualEntregueOP: ignora defeito e arredonda', () => {
+  const opItens = [{ id: 1, metros_pedidos: 30, metros_ajustados: null }];
+  const entregaItens = [
+    { op_item_id: 1, metros_entregues: 10, defeito: false },
+    { op_item_id: 1, metros_entregues: 5, defeito: true },
+  ];
+  assert.strictEqual(percentualEntregueOP(opItens, entregaItens), 33);
+});
+
+test('percentualEntregueOP: meta zero retorna 0', () => {
+  assert.strictEqual(percentualEntregueOP([], []), 0);
+});
+
+test('percentualEntregueOP: cap em 100 quando entregue excede a meta', () => {
+  const opItens = [{ id: 1, metros_pedidos: 10, metros_ajustados: null }];
+  const entregaItens = [{ op_item_id: 1, metros_entregues: 25, defeito: false }];
+  assert.strictEqual(percentualEntregueOP(opItens, entregaItens), 100);
+});
+
+test('agruparOrdensCompraFio: separa por tipo, soma kg e ordena', () => {
+  const ordens = [
+    { tipo: 'algodao', kg_pedido: 5, cores: { nome: 'VERDE' } },
+    { tipo: 'algodao', kg_pedido: 2.5, cores: { nome: 'AZUL' } },
+    { tipo: 'algodao', kg_pedido: 1.5, cores: { nome: 'AZUL' } },
+    { tipo: 'poliester', kg_pedido: 3, cor_poliester: 'PRETO' },
+  ];
+  const r = agruparOrdensCompraFio(ordens);
+  assert.deepStrictEqual(r.algodao, [{ rotulo: 'AZUL', kg: 4 }, { rotulo: 'VERDE', kg: 5 }]);
+  assert.deepStrictEqual(r.poliester, [{ rotulo: 'PRETO', kg: 3 }]);
+  assert.strictEqual(r.totalAlgodao, 9);
+  assert.strictEqual(r.totalPoliester, 3);
+});
+
+test('agruparOrdensCompraFio: lista vazia', () => {
+  const r = agruparOrdensCompraFio([]);
+  assert.deepStrictEqual(r, { algodao: [], poliester: [], totalAlgodao: 0, totalPoliester: 0 });
 });

@@ -145,6 +145,43 @@ function totalEntregueCimaPorItem(itens) {
   return acc;
 }
 
+// % entregue de uma OP (Fase 6). meta = soma de (ajustado ?? pedido) dos op_itens;
+// feito = soma de metros_entregues sem defeito dos entrega_itens da OP. Cap 0..100.
+function percentualEntregueOP(opItens, entregaItens) {
+  const meta = (opItens || []).reduce((s, i) => {
+    const m = (i.metros_ajustados == null ? Number(i.metros_pedidos) : Number(i.metros_ajustados));
+    return s + (Number.isFinite(m) ? m : 0);
+  }, 0);
+  if (!(meta > 0)) return 0;
+  const feito = (entregaItens || []).reduce((s, ei) => {
+    if (ei.defeito) return s;
+    const m = Number(ei.metros_entregues);
+    return s + (Number.isFinite(m) ? m : 0);
+  }, 0);
+  return Math.min(100, Math.round((feito / meta) * 100));
+}
+
+// Agrupa ordens de compra de fio por tipo p/ o PDF (Fase 6). Soma kg por rótulo,
+// ordena alfabeticamente. Algodão usa a cor; poliéster usa PRETO/BRANCO.
+function agruparOrdensCompraFio(ordens) {
+  const acc = { algodao: {}, poliester: {} };
+  for (const o of (ordens || [])) {
+    if (o.tipo === 'algodao') {
+      const rot = (o.cores && o.cores.nome) ? o.cores.nome : '?';
+      acc.algodao[rot] = (acc.algodao[rot] || 0) + (Number(o.kg_pedido) || 0);
+    } else if (o.tipo === 'poliester') {
+      const rot = o.cor_poliester || '?';
+      acc.poliester[rot] = (acc.poliester[rot] || 0) + (Number(o.kg_pedido) || 0);
+    }
+  }
+  const r2 = (n) => Math.round(n * 1000) / 1000;
+  const toList = (m) => Object.keys(m).sort().map(rotulo => ({ rotulo, kg: r2(m[rotulo]) }));
+  const algodao = toList(acc.algodao);
+  const poliester = toList(acc.poliester);
+  const soma = (l) => r2(l.reduce((s, x) => s + x.kg, 0));
+  return { algodao, poliester, totalAlgodao: soma(algodao), totalPoliester: soma(poliester) };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { larguraKey, calcularFiosOP, montarOrdensCompraFio, recalcularOP, consumoPorOrdem, totalEntregueCimaPorItem };
+  module.exports = { larguraKey, calcularFiosOP, montarOrdensCompraFio, recalcularOP, consumoPorOrdem, totalEntregueCimaPorItem, percentualEntregueOP, agruparOrdensCompraFio };
 }
