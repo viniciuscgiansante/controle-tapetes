@@ -1114,16 +1114,18 @@ async function screenNovaOP(opId) {
   const container = el('div', {});
 
   // 1) Carrega dados de apoio
-  const [modelosRes, paramsRes, fornsRes] = await Promise.all([
+  const [modelosRes, paramsRes, fornsRes, clientesRes] = await Promise.all([
     supa.from('modelos').select('id, nome, largura, cor_1:cor_1_id(id,nome), cor_2:cor_2_id(id,nome)').order('nome'),
     supa.from('parametros_largura').select('*'),
     supa.from('fornecedores').select('id, nome, tipo').order('nome'),
+    supa.from('clientes').select('id, nome').order('nome'),
   ]);
-  if (modelosRes.error || paramsRes.error || fornsRes.error) {
+  if (modelosRes.error || paramsRes.error || fornsRes.error || clientesRes.error) {
     toast('Erro ao carregar dados da OP', 'error');
-    console.error(modelosRes.error || paramsRes.error || fornsRes.error);
+    console.error(modelosRes.error || paramsRes.error || fornsRes.error || clientesRes.error);
     return shellLayout(ADMIN_MENU, container);
   }
+  const clientesOptions = (clientesRes.data || []).map(c => ({ value: c.id, label: c.nome }));
   const modelos = modelosRes.data || [];
   const modelosById = Object.fromEntries(modelos.map(m => [m.id, m]));
   const parametrosByLargura = Object.fromEntries((paramsRes.data || []).map(p => [larguraKey(p.largura), p]));
@@ -1134,6 +1136,7 @@ async function screenNovaOP(opId) {
   let op = null;                 // OP existente (modo edição/leitura)
   let itens = [];                // [{ modeloId, metros }]
   let fornSel = { fio_algodao: '', fio_poliester: '', cima: '' };
+  let clienteSel = '';
   let opItensRaw = [];
   let ordens = [];
   let entregasCima = [];
@@ -1146,7 +1149,7 @@ async function screenNovaOP(opId) {
 
   if (opId) {
     const { data, error } = await supa.from('ops')
-      .select('id, numero, ano, status, tipo, observacao, origem_op_id, op_itens(id, modelo_id, metros_pedidos, metros_ajustados), op_fornecedores(fornecedor_id, etapa)')
+      .select('id, numero, ano, status, tipo, observacao, origem_op_id, lote_id, lote:lote_id(id, numero, cliente:cliente_id(id, nome)), op_itens(id, modelo_id, metros_pedidos, metros_ajustados), op_fornecedores(fornecedor_id, etapa)')
       .eq('id', opId).single();
     if (error || !data) {
       toast('OP não encontrada', 'error'); console.error(error);
@@ -1154,6 +1157,7 @@ async function screenNovaOP(opId) {
       return shellLayout(ADMIN_MENU, container);
     }
     op = data;
+    clienteSel = op.lote?.cliente?.id || '';
     if (op.tipo === 'latex') return await renderOPLatexAdmin(op.id);
     numero = data.numero; ano = data.ano;
     itens = (data.op_itens || []).map(i => ({ modeloId: i.modelo_id, metros: i.metros_pedidos }));
@@ -1197,22 +1201,36 @@ async function screenNovaOP(opId) {
   async function persistir(status) {
     const numeroInt = parseInt(numero, 10), anoInt = parseInt(ano, 10);
     if (!numeroInt || !anoInt) { toast('Número e ano são obrigatórios', 'error'); return null; }
+    if (!clienteSel) { toast('Escolha o cliente', 'error'); return null; }
     const validos = itensValidos();
     if (validos.length === 0) { toast('Adicione ao menos 1 item com metros', 'error'); return null; }
 
-    if (status === 'aberta') {
-      const faltam = ['fio_algodao', 'fio_poliester', 'cima'].filter(e => !fornSel[e]);
-      if (faltam.length) { toast('Escolha os 3 fornecedores antes de abrir a OP', 'error'); return null; }
+    if (status === 'aberta' && !fornSel.cima) {
+      toast('Escolha o fornecedor de tecelagem antes de abrir a OP', 'error'); return null;
+    }
+
+    // Lote: cria no 1º salvamento (OP nova ou legada sem lote); senão atualiza o cliente.
+    let loteId = op?.lote_id || null;
+    if (loteId) {
+      const lu = await supa.from('lotes').update({ cliente_id: clienteSel }).eq('id', loteId);
+      if (lu.error) { toast('Erro ao atualizar lote', 'error'); console.error(lu.error); return null; }
+    } else {
+      const proxRes = await supa.from('lotes').select('numero').order('numero', { ascending: false }).limit(1);
+      if (proxRes.error) { toast('Erro ao ler lotes', 'error'); console.error(proxRes.error); return null; }
+      const prox = (proxRes.data && proxRes.data[0]) ? Number(proxRes.data[0].numero) + 1 : 1;
+      const li = await supa.from('lotes').insert({ numero: prox, cliente_id: clienteSel }).select().single();
+      if (li.error) { toast('Erro ao criar lote', 'error'); console.error(li.error); return null; }
+      loteId = li.data.id;
     }
 
     // 1) upsert ops
     let opRow;
     if (op) {
-      const r = await supa.from('ops').update({ numero: numeroInt, ano: anoInt, status }).eq('id', op.id).select().single();
+      const r = await supa.from('ops').update({ numero: numeroInt, ano: anoInt, status, lote_id: loteId }).eq('id', op.id).select().single();
       if (r.error) { erroSalvar(r.error); return null; }
       opRow = r.data;
     } else {
-      const r = await supa.from('ops').insert({ numero: numeroInt, ano: anoInt, status }).select().single();
+      const r = await supa.from('ops').insert({ numero: numeroInt, ano: anoInt, status, lote_id: loteId }).select().single();
       if (r.error) { erroSalvar(r.error); return null; }
       opRow = r.data;
     }
@@ -1227,25 +1245,22 @@ async function screenNovaOP(opId) {
       toast('Erro ao salvar itens', 'error'); console.error(itensRes.error); return null;
     }
 
-    // 3) substitui op_fornecedores (apenas etapas escolhidas)
+    // 3) substitui op_fornecedores — só tecelagem na criação (fios são atribuídos depois)
     await supa.from('op_fornecedores').delete().eq('op_id', opIdSalvo);
-    const fornPayload = ['fio_algodao', 'fio_poliester', 'cima']
-      .filter(e => fornSel[e])
-      .map(e => ({ op_id: opIdSalvo, fornecedor_id: fornSel[e], etapa: e }));
-    if (fornPayload.length) {
-      const fornRes = await supa.from('op_fornecedores').insert(fornPayload);
+    if (fornSel.cima) {
+      const fornRes = await supa.from('op_fornecedores').insert([{ op_id: opIdSalvo, fornecedor_id: fornSel.cima, etapa: 'cima' }]);
       if (fornRes.error) {
         if (status === 'aberta') await supa.from('ops').update({ status: 'simulada' }).eq('id', opIdSalvo);
-        toast('Erro ao salvar fornecedores', 'error'); console.error(fornRes.error); return null;
+        toast('Erro ao salvar fornecedor de tecelagem', 'error'); console.error(fornRes.error); return null;
       }
     }
 
-    // 4) se abrir: gera ordens_compra_fio (com rollback de status em caso de falha)
+    // 4) se abrir: gera ordens_compra_fio SEM fornecedor (atribuído depois)
     if (status === 'aberta') {
       const calc = calcularFiosOP(validos, modelosById, parametrosByLargura);
       const ordens = montarOrdensCompraFio(calc).map(o => ({
         op_id: opIdSalvo,
-        fornecedor_id: o.tipo === 'algodao' ? fornSel.fio_algodao : fornSel.fio_poliester,
+        fornecedor_id: null,
         tipo: o.tipo, cor_id: o.cor_id, cor_poliester: o.cor_poliester,
         kg_pedido: o.kg_pedido, status: 'pendente',
       }));
@@ -1335,9 +1350,12 @@ async function screenNovaOP(opId) {
       }, '+ adicionar item'));
     }
 
-    left.appendChild(el('div', { class: 'font-semibold text-gray-700 mt-5 mb-2' }, 'Fornecedores'));
-    left.appendChild(buildFornField('Algodão', 'fio_algodao'));
-    left.appendChild(buildFornField('Poliéster', 'fio_poliester'));
+    left.appendChild(el('div', { class: 'font-semibold text-gray-700 mt-5 mb-2' }, 'Cliente'));
+    const clienteSelEl = disabledAttr(selectInput({ options: clientesOptions, value: clienteSel, placeholder: 'Selecione o cliente...' }));
+    clienteSelEl.addEventListener('change', () => { clienteSel = clienteSelEl.value ? Number(clienteSelEl.value) : ''; renderRight(); });
+    left.appendChild(formField({ label: 'Cliente', input: clienteSelEl }));
+
+    left.appendChild(el('div', { class: 'font-semibold text-gray-700 mt-5 mb-2' }, 'Fornecedor de tecelagem'));
     left.appendChild(buildFornField('Tecelagem (parte de cima)', 'cima'));
 
     return left;
@@ -1841,7 +1859,9 @@ async function screenNovaOP(opId) {
     children.push(el('p', { class: 'text-sm mb-1' }, 'BRANCO: ', el('b', {}, fmt(calc.poliester.BRANCO))));
 
     if (!readOnly) {
-      const faltamForn = ['fio_algodao', 'fio_poliester', 'cima'].filter(e => !fornSel[e]);
+      const faltamForn = [];
+      if (!clienteSel) faltamForn.push('cliente');
+      if (!fornSel.cima) faltamForn.push('tecelagem');
       const btnSim = el('button', {
         class: 'w-full mt-5 mb-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg py-2',
         onclick: salvarSimulacao,
@@ -1854,7 +1874,7 @@ async function screenNovaOP(opId) {
       }, 'Abrir OP');
       if (faltamForn.length) btnAbrir.setAttribute('disabled', 'disabled');
       children.push(btnSim, btnAbrir);
-      if (faltamForn.length) children.push(el('p', { class: 'text-xs text-gray-500 mt-1' }, 'Escolha os 3 fornecedores para abrir.'));
+      if (faltamForn.length) children.push(el('p', { class: 'text-xs text-gray-500 mt-1' }, 'Escolha cliente e fornecedor de tecelagem para abrir.'));
     }
 
     rightNode.replaceChildren(...children);
