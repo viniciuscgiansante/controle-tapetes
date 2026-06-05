@@ -1209,7 +1209,21 @@ async function screenNovaOP(opId) {
       toast('Escolha o fornecedor de tecelagem antes de abrir a OP', 'error'); return null;
     }
 
-    // Lote: cria no 1º salvamento (OP nova ou legada sem lote); senão atualiza o cliente.
+    // 1) upsert ops PRIMEIRO — evita lote órfão se o número da OP duplicar.
+    let opRow;
+    if (op) {
+      const r = await supa.from('ops').update({ numero: numeroInt, ano: anoInt, status }).eq('id', op.id).select().single();
+      if (r.error) { erroSalvar(r.error); return null; }
+      opRow = r.data;
+    } else {
+      const r = await supa.from('ops').insert({ numero: numeroInt, ano: anoInt, status }).select().single();
+      if (r.error) { erroSalvar(r.error); return null; }
+      opRow = r.data;
+    }
+    const opIdSalvo = opRow.id;
+
+    // 2) lote: cria no 1º salvamento (OP nova ou legada sem lote); senão atualiza o
+    //    cliente. Liga em ops.lote_id. Numeração depende do UNIQUE(numero) de lotes.
     let loteId = op?.lote_id || null;
     if (loteId) {
       const lu = await supa.from('lotes').update({ cliente_id: clienteSel }).eq('id', loteId);
@@ -1219,22 +1233,14 @@ async function screenNovaOP(opId) {
       if (proxRes.error) { toast('Erro ao ler lotes', 'error'); console.error(proxRes.error); return null; }
       const prox = (proxRes.data && proxRes.data[0]) ? Number(proxRes.data[0].numero) + 1 : 1;
       const li = await supa.from('lotes').insert({ numero: prox, cliente_id: clienteSel }).select().single();
-      if (li.error) { toast('Erro ao criar lote', 'error'); console.error(li.error); return null; }
+      if (li.error) {
+        if (!op) await supa.from('ops').delete().eq('id', opIdSalvo);  // limpa OP recém-criada
+        toast('Erro ao criar lote', 'error'); console.error(li.error); return null;
+      }
       loteId = li.data.id;
+      const ou = await supa.from('ops').update({ lote_id: loteId }).eq('id', opIdSalvo);
+      if (ou.error) { toast('Erro ao vincular lote à OP', 'error'); console.error(ou.error); return null; }
     }
-
-    // 1) upsert ops
-    let opRow;
-    if (op) {
-      const r = await supa.from('ops').update({ numero: numeroInt, ano: anoInt, status, lote_id: loteId }).eq('id', op.id).select().single();
-      if (r.error) { erroSalvar(r.error); return null; }
-      opRow = r.data;
-    } else {
-      const r = await supa.from('ops').insert({ numero: numeroInt, ano: anoInt, status, lote_id: loteId }).select().single();
-      if (r.error) { erroSalvar(r.error); return null; }
-      opRow = r.data;
-    }
-    const opIdSalvo = opRow.id;
 
     // 2) substitui op_itens
     await supa.from('op_itens').delete().eq('op_id', opIdSalvo);
