@@ -1410,12 +1410,13 @@ async function screenNovaOP(opId) {
       .update({ fornecedor_id: fornecedorId })
       .eq('op_id', op.id).eq('tipo', tipo);
     if (u.error) { toast('Erro ao atribuir fornecedor às ordens', 'error'); console.error(u.error); return; }
-    await supa.from('op_fornecedores').delete().eq('op_id', op.id).eq('etapa', etapa);
+    const del = await supa.from('op_fornecedores').delete().eq('op_id', op.id).eq('etapa', etapa);
+    if (del.error) { toast('Erro ao remover vínculo anterior do fornecedor', 'error'); console.error(del.error); return; }
     const ins = await supa.from('op_fornecedores').insert([{ op_id: op.id, fornecedor_id: fornecedorId, etapa }]);
     if (ins.error) { toast('Erro ao vincular fornecedor', 'error'); console.error(ins.error); return; }
     fioFornSel[etapa] = fornecedorId;
     toast('Fornecedor atribuído', 'success');
-    reloadOrdens();
+    await reloadOrdens();
   }
 
   async function reloadOrdens() {
