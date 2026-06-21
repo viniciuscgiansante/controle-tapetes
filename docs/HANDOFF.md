@@ -70,12 +70,15 @@ Ou só abrir o `index.html` no navegador (duplo clique).
 
 ### Usuários de teste
 
-| Email                  | Senha      | Perfil                |
-|------------------------|------------|-----------------------|
-| admin@tapetes.test     | Admin123!  | admin                 |
-| algodao@tapetes.test   | Fornec123! | fornecedor (fio)      |
-| tecelagem@tapetes.test | Fornec123! | fornecedor (tecelagem)|
-| latex@tapetes.test     | Fornec123! | fornecedor (látex)    |
+> ⚠️ **Senhas removidas em 2026-06-21** (estavam publicadas em repo público — risco crítico).
+> Excluir/rotacionar os `*@tapetes.test` no Supabase Auth. Ver `PROJECT_STATE.md`.
+
+| Email                  | Senha       | Perfil                |
+|------------------------|-------------|-----------------------|
+| admin@tapetes.test     | (removida)  | admin                 |
+| algodao@tapetes.test   | (removida)  | fornecedor (fio)      |
+| tecelagem@tapetes.test | (removida)  | fornecedor (tecelagem)|
+| latex@tapetes.test     | (removida)  | fornecedor (látex)    |
 
 ## 5. Como rodar os testes
 

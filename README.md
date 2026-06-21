@@ -34,11 +34,16 @@ git push
 
 GitHub Pages publica automaticamente em ~1min.
 
-## Usuários de teste (Fase 1)
+## Usuários de teste
 
-| Email                     | Senha       | Tipo                  |
-|---------------------------|-------------|-----------------------|
-| admin@tapetes.test        | Admin123!   | admin                 |
-| algodao@tapetes.test      | Fornec123!  | fornecedor (fio)      |
-| tecelagem@tapetes.test    | Fornec123!  | fornecedor (cima)     |
-| latex@tapetes.test        | Fornec123!  | fornecedor (látex)    |
+> ⚠️ **Senhas removidas em 2026-06-21.** Estavam publicadas neste arquivo (repo público),
+> o que é um risco crítico de segurança — qualquer um podia logar como admin em produção.
+> Os usuários `*@tapetes.test` devem ser **excluídos/rotacionados no Supabase Auth**.
+> Nunca use credenciais de teste em produção. Ver `PROJECT_STATE.md`.
+
+| Email                     | Senha        | Tipo                  |
+|---------------------------|--------------|-----------------------|
+| admin@tapetes.test        | (removida)   | admin                 |
+| algodao@tapetes.test      | (removida)   | fornecedor (fio)      |
+| tecelagem@tapetes.test    | (removida)   | fornecedor (cima)     |
+| latex@tapetes.test        | (removida)   | fornecedor (látex)    |
